@@ -1,0 +1,9 @@
+# Ignore audio samples
+audio_samples/*
+
+# Ignore NLU transformer model
+model/nlu_model/*
+
+# Ignore Python virtual environment and cache files 
+venv/
+model/__pycache__/
