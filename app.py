@@ -1,11 +1,15 @@
 from flask import Flask, jsonify, request
 import speech_recognition as sr
 import unicodedata
+import os
 from model import predict_text
 from model.postprocessing import postprocess_entities_to_json
 from model.menu_items import MENU_ITEMS
 
 app = Flask(__name__)
+
+
+RECORDINGS_DIR = "audio_samples"
 
 def normalize_accents(text):
 	#Convert accented chars to canonical form (e.g: ú -> u)
@@ -15,13 +19,42 @@ def normalize_accents(text):
 
 @app.route("/predict", methods=["GET"])
 def predict_order():
+
+	# ---------------------------------
+	# GET JSON REQUEST DATA
+	# ---------------------------------
+
 	"""
-	Expects JSON: {"audio_path": "audio_samples/voice1.wav"}
+	Expects JSON: {"filename": "voice1.wav"}
 	"""
-	data = request.get_json()
-	audio_path = data.get("audio_path")
-	if not audio_path:
-		return jsonify({"error": "audio_path not provided"}), 400
+	if not request.is_json:
+		return jsonify({"error": "Expected JSON payload"}), 400
+
+	data = request.get_json(silent=True)
+
+	if not data:
+		return jsonify({"error": "Invalid JSON data"}), 400
+
+	filename = data.get("filename")
+	if not filename:
+		return jsonify({"error": "filename not provided"}), 400
+
+	# Prevent directory traversal attacks like "../../etc/passwd"
+	if "/" in filename or "\\" in filename:
+		return jsonify({"error": "Invalid filename"}), 400
+
+	audio_path = os.path.join(RECORDINGS_DIR, filename)
+
+
+	if not os.path.exist(audio_path):
+		return jsonify({"error": f"Audio file not found: {filename}"}), 404
+
+	if os.path.getsize(audio_path) < 500: # ~0.5 KB
+		return jsonify({"error": f"Audio file ({filename}) is empty or too short"})
+
+	# ---------------------------------
+	# STT API REQUEST AND RESPONSE
+	# ---------------------------------
 
 	recognizer = sr.Recognizer()
 	try:
@@ -33,8 +66,16 @@ def predict_order():
 		return jsonify({"error": f"Speech recognition failed: {str(e)}"}), 500
 
 	text = normalize_accents(text)
+
+	# ---------------------------------
+	# TRANSFORMER MODEL
+	# ---------------------------------
 	entities = predict_text(text)
-	print(text)
+
+
+	# ---------------------------------
+	# POSTPROCESSING AND FINAL OUTPUT
+	# ---------------------------------
 	order_json = postprocess_entities_to_json(text, entities, MENU_ITEMS)
 
 	return jsonify({
