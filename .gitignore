@@ -6,4 +6,4 @@ model/nlu_model/*
 
 # Ignore Python virtual environment and cache files 
 venv/
-model/__pycache__/
+*/__pycache__/

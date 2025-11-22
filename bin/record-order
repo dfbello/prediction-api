@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dir="audio_samples"
+dir="/home/diego/Projects/TDG/PredictionAPI/prediction-api/audio_samples"
 
 # Create folder if missing
 [ ! -d "$dir" ] && mkdir -p "$dir"
@@ -19,10 +19,14 @@ rec_pid=$!
 read -r
 
 # Stop recording
-kill $rec_pid >/dev/null 2>&1
+kill -INT $rec_pid >/dev/null 2>&1
 
 # Make sure the process actually stops
 wait $rec_pid 2>/dev/null
+
+while [ ! -s "$file" ]; do
+	sleep 2
+done
 
 echo "Recording stopped."
 echo "Sending to API..."

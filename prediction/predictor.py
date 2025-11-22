@@ -1,0 +1,28 @@
+# prediction/predictor.py
+
+from prediction.text_cleaner import normalize_text
+from model.postprocessing import postprocess_entities_to_json
+
+# Temporary menu until Mongo integration is enabled
+menu = None
+
+def set_menu(new_menu):
+    """Assign menu from legacy Python file."""
+    global menu
+    menu = new_menu
+
+
+def predict(text: str, ner_pipeline):
+    if menu is None:
+        return {"error": "No menu loaded"}
+
+    clean_text = normalize_text(text)
+
+    entities = ner_pipeline(clean_text)
+
+    final_output = postprocess_entities_to_json(clean_text, entities, menu)
+
+    return {
+        "transcript": clean_text,
+        "prediction": final_output,
+    }

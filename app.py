@@ -1,21 +1,19 @@
 from flask import Flask, jsonify, request
 import speech_recognition as sr
-import unicodedata
 import os
-from model import predict_text
-from model.postprocessing import postprocess_entities_to_json
-from model.menu_items import MENU_ITEMS
+
+from model.loader import load_model
+from prediction.predictor import predict, set_menu
+
+from model.menu_items import MENU_ITEMS # TEMPORAL
 
 app = Flask(__name__)
 
-
 RECORDINGS_DIR = "audio_samples"
 
-def normalize_accents(text):
-	#Convert accented chars to canonical form (e.g: ú -> u)
-	text = unicodedata.normalize("NFD", text)
-	text = "".join(c for c in text if unicodedata.category(c) != "Mn")
-	return text
+ner_pipeline = load_model()
+set_menu(MENU_ITEMS)
+
 
 @app.route("/predict", methods=["GET"])
 def predict_order():
@@ -46,7 +44,7 @@ def predict_order():
 	audio_path = os.path.join(RECORDINGS_DIR, filename)
 
 
-	if not os.path.exist(audio_path):
+	if not os.path.exists(audio_path):
 		return jsonify({"error": f"Audio file not found: {filename}"}), 404
 
 	if os.path.getsize(audio_path) < 500: # ~0.5 KB
@@ -65,23 +63,11 @@ def predict_order():
 	except Exception as e:
 		return jsonify({"error": f"Speech recognition failed: {str(e)}"}), 500
 
-	text = normalize_accents(text)
-
 	# ---------------------------------
-	# TRANSFORMER MODEL
+	# TRANSFORMER MODEL & POSTPROCESSING AND FINAL OUTPUT
 	# ---------------------------------
-	entities = predict_text(text)
-
-
-	# ---------------------------------
-	# POSTPROCESSING AND FINAL OUTPUT
-	# ---------------------------------
-	order_json = postprocess_entities_to_json(text, entities, MENU_ITEMS)
-
-	return jsonify({
-		"transcript": text,
-		"order_prediction": order_json
-	})
+	result = predict(text, ner_pipeline)
+	return jsonify(result)
 
 if __name__ == "__main__":
 	app.run(debug=True)
