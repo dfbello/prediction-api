@@ -1,4 +1,9 @@
 #!/bin/bash
+# ---------
+## This is a bash script for recording, storing and sending an audio file to the prediction api, which is running on the same machine.
+## The recording is done with arecord, a command-line soundfile recorder.
+# ---------
+
 
 dir="/home/diego/Projects/TDG/PredictionAPI/prediction-api/audio_samples"
 
@@ -23,10 +28,6 @@ kill -INT $rec_pid >/dev/null 2>&1
 
 # Make sure the process actually stops
 wait $rec_pid 2>/dev/null
-
-while [ ! -s "$file" ]; do
-	sleep 2
-done
 
 echo "Recording stopped."
 echo "Sending to API..."

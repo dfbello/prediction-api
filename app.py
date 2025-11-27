@@ -3,16 +3,16 @@ import speech_recognition as sr
 import os
 
 from model.loader import load_model
-from prediction.predictor import predict, set_menu
+from menu.menu_loader import load_menu_from_file
+from prediction.predictor import predict
 
-from model.menu_items import MENU_ITEMS # TEMPORAL
 
 app = Flask(__name__)
 
 RECORDINGS_DIR = "audio_samples"
 
 ner_pipeline = load_model()
-set_menu(MENU_ITEMS)
+load_menu_from_file("../menu_items.json")
 
 
 @app.route("/predict", methods=["GET"])
