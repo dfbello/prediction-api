@@ -2,17 +2,12 @@
 
 from prediction.text_cleaner import normalize_text
 from model.postprocessing import postprocess_entities_to_json
-
-# Temporary menu until Mongo integration is enabled
-menu = None
-
-def set_menu(new_menu):
-    """Assign menu from legacy Python file."""
-    global menu
-    menu = new_menu
-
+from menu.manager import get_menu
 
 def predict(text: str, ner_pipeline):
+
+    menu = get_menu()
+
     if menu is None:
         return {"error": "No menu loaded"}
 
