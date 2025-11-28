@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request
 import speech_recognition as sr
 import os
 
-from model.loader import load_model
+from model.loader import find_latest_model, load_model
 from menu.menu_loader import load_menu_from_file
 from prediction.predictor import predict
 
@@ -10,8 +10,10 @@ from prediction.predictor import predict
 app = Flask(__name__)
 
 RECORDINGS_DIR = "audio_samples"
+MODELS_DIR = "model/nlu_model/"
 
-ner_pipeline = load_model()
+model_path = find_latest_model(MODELS_DIR)
+ner_pipeline = load_model(model_path)
 load_menu_from_file("../menu_items.json")
 
 

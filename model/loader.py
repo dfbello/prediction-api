@@ -1,11 +1,29 @@
-
+import os
+import glob
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
-
-MODEL_PATH = "model/nlu_model/checkpoint-300"   # adjust if needed
 
 _nlu_pipeline = None
 
-def load_model():
+
+def find_latest_model(base_dir):
+    """
+    Returns the path (base_dir + filename) of the latest modified checkpoint-* folder on base_dir
+    """
+    # Find all folders "checkpoint-*"
+    checkpoints = glob.glob(os.path.join(base_dir, "checkpoint-*"))
+
+    if not checkpoints:
+        raise RuntimeError(f"No checkpoints found in {base_dir}")
+
+    # Pick the newest folder by modification time
+    latest = max(checkpoints, key=os.path.getmtime)
+    print(f"[INFO] Latest checkpoint detected: {latest}")
+
+    return latest
+
+
+
+def load_model(model_path):
     """
     Loads the HuggingFace NER model and pipeline only once.
     Returns the global pipeline object.
@@ -17,8 +35,8 @@ def load_model():
 
     print("[INFO] Loading NLU model...")
 
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
-    model = AutoModelForTokenClassification.from_pretrained(MODEL_PATH)
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoModelForTokenClassification.from_pretrained(model_path)
 
     _nlu_pipeline = pipeline(
         "ner",
