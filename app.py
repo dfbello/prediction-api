@@ -10,7 +10,7 @@ from prediction.predictor import predict
 app = Flask(__name__)
 
 RECORDINGS_DIR = "audio_samples"
-MODELS_DIR = "model/nlu_model/"
+MODELS_DIR = "models/test_menu/nlu_model/"
 
 model_path = find_latest_model(MODELS_DIR)
 ner_pipeline = load_model(model_path)
