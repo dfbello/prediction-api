@@ -4,6 +4,7 @@ import os
 
 from model.loader import find_latest_model, load_model
 from menu.menu_loader import load_menu_from_file
+from menu.manager import set_menu
 from prediction.predictor import predict
 
 
