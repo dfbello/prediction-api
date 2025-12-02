@@ -5,7 +5,7 @@
 # ---------
 
 
-dir="/home/diego/Projects/TDG/PredictionAPI/prediction-api/audio_samples"
+dir="/home/diego/Projects/TDG/voice-ordering-module/prediction-api/audio_samples"
 
 # Create folder if missing
 [ ! -d "$dir" ] && mkdir -p "$dir"

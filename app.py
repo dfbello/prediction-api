@@ -4,6 +4,7 @@ import os
 
 from model.loader import find_latest_model, load_model
 from menu.menu_loader import load_menu_from_file
+from menu.manager import set_menu
 from prediction.predictor import predict
 
 
@@ -70,6 +71,28 @@ def predict_order():
 	# ---------------------------------
 	result = predict(text, ner_pipeline)
 	return jsonify(result)
+
+@app.route("/menu/update", methods=["POST"])
+def menu_update():
+	"""
+	Webhook endpoint called by the Menu Management Service.
+	Receives a full menu object and replaces the cached menu.
+	"""
+	if not request.is_json:
+		return jsonify({"error": "Expected JSON body"}), 400
+
+	data = request.get_json()
+
+	menu = data.get("menu")
+	if menu is None:
+		return jsonify({"error": "Missing 'menu' field"}), 400
+
+	# Replace the menu in cache for the predictor
+	set_menu(menu)
+
+	print("[INFO] Menu updated successfully via webhook")
+	return jsonify({"status": "menu updated"}), 200
+
 
 if __name__ == "__main__":
 	app.run(debug=True)
