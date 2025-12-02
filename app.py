@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 import speech_recognition as sr
 import os
 
+from config import CLIENT_ID, FRANCHISE_ID
 from model.loader import find_latest_model, load_model
 from menu.menu_loader import load_menu_from_file
 from menu.manager import set_menu
@@ -86,6 +87,14 @@ def menu_update():
 	menu = data.get("menu")
 	if menu is None:
 		return jsonify({"error": "Missing 'menu' field"}), 400
+
+	## Validate client and franchise
+
+	if data.get("client_id") != CLIENT_ID:
+		return jsonify({"error": "Field \"client_id\" does not match current client id"}), 400
+
+	if data.get("franchise_id") != FRANCHISE_ID:
+		return jsonify({"error": "Field \"franchise_id\" does not match current franchise id"}), 400
 
 	# Replace the menu in cache for the predictor
 	set_menu(menu)
