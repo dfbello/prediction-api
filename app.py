@@ -90,10 +90,10 @@ def menu_update():
 
 	## Validate client and franchise
 
-	if data.get("client_id") != CLIENT_ID:
+	if menu.get("client_id") != CLIENT_ID:
 		return jsonify({"error": "Field \"client_id\" does not match current client id"}), 400
 
-	if data.get("franchise_id") != FRANCHISE_ID:
+	if menu.get("franchise_id") != FRANCHISE_ID:
 		return jsonify({"error": "Field \"franchise_id\" does not match current franchise id"}), 400
 
 	# Replace the menu in cache for the predictor
