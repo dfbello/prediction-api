@@ -61,7 +61,7 @@ def postprocess_entities_to_json(text, entities, menu_items, similarity_threshol
             return alias_lookup[match]["name"]
 
         # fallback to raw word if no strong match
-        return raw_word
+        return None
 
     # ------------------------------------------------------------
     # 3. Order building
@@ -112,6 +112,9 @@ def postprocess_entities_to_json(text, entities, menu_items, similarity_threshol
         # -------------------------------
         elif label == "ITEM":
             resolved_name = resolve_item_name(word)
+            
+            if resolved_name is None:
+                continue  # skip unrecognized items
 
             if not current_item:
                 # e.g., user said "hamburguesa" with no number
@@ -148,5 +151,5 @@ def postprocess_entities_to_json(text, entities, menu_items, similarity_threshol
     for it in items:
         it["modificadores"].extend(global_mods)
 
-    return {"items": items}
+    return {"items": items} if items else None
 

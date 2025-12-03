@@ -17,7 +17,11 @@ def predict(text: str, ner_pipeline):
 
     final_output = postprocess_entities_to_json(clean_text, entities, menu)
 
-    return {
-        "transcript": clean_text,
-        "prediction": final_output,
-    }
+    if final_output:
+        return {
+            "transcript": clean_text,
+            "prediction": final_output,
+        }
+    else:
+        return final_output
+    

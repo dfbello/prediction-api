@@ -1,3 +1,3 @@
-CLIENT_ID = "Joven Burger"
-FRANCHISE_ID = "sede Plaza Imperial"
+CLIENT_ID = "test_client"
+FRANCHISE_ID = "test_store"
 
