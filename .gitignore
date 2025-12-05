@@ -7,4 +7,4 @@ models/*
 
 # Ignore Python virtual environment and cache files 
 venv/
-*/__pycache__/
+__pycache__/

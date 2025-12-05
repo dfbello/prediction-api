@@ -1,5 +1,5 @@
 import unicodedata
-from fuzzywuzzy import process
+from fuzzywuzzy import process, fuzz
 from prediction.text_cleaner import normalize_text
 
 
@@ -54,13 +54,29 @@ def postprocess_entities_to_json(text, entities, menu_items, similarity_threshol
         """Return the *menu item name* (string), NOT the full dict."""
         raw_norm = normalize_text(raw_word)
 
-        match, score = process.extractOne(raw_norm, alias_list)
+        # Reject very short tokens unless they match an alias token exactly
+        if len(raw_norm) <= 2:
+            for alias in alias_list:
+                # alias already normalized; check whole-token equality, not substring
+                if raw_norm in alias.split():
+                    return alias_lookup[alias]["name"]
+            return None
+
+        # Fast exact lookup
+        if raw_norm in alias_lookup:
+            return alias_lookup[raw_norm]["name"]
+
+        # Use token_set_ratio to compare normalized strings (better for multiword aliases)
+        match, score = process.extractOne(raw_norm, alias_list, scorer=fuzz.token_set_ratio)
+        print(f"[DEBUG] Fuzzy match: '{raw_word}' -> '{match}' (score: {score})")
+
+        # Special-case short inputs: require very high confidence
+        if len(raw_norm) < 4 and score < 90:
+            return None
 
         if score >= similarity_threshold:
-            # return the canonical menu name
             return alias_lookup[match]["name"]
 
-        # fallback to raw word if no strong match
         return None
 
     # ------------------------------------------------------------
@@ -124,6 +140,7 @@ def postprocess_entities_to_json(text, entities, menu_items, similarity_threshol
                     "modificadores": []
                 }
             else:
+                
                 if current_item["producto"] is None:
                     current_item["producto"] = resolved_name
                 else:
@@ -146,10 +163,10 @@ def postprocess_entities_to_json(text, entities, menu_items, similarity_threshol
     # ------------------------------------------------------------
 
     if current_item:
-        items.append(current_item)
+        items.append(current_item) if current_item["producto"] else None
 
-    for it in items:
-        it["modificadores"].extend(global_mods)
+    #for it in items:
+    #    it["modificadores"].extend(global_mods)
 
     return {"items": items} if items else None
 

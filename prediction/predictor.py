@@ -10,7 +10,6 @@ def predict(text: str, ner_pipeline):
 
     if menu is None:
         return {"error": "No menu loaded"}
-
     clean_text = normalize_text(text)
 
     entities = ner_pipeline(clean_text)
