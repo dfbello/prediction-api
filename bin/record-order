@@ -1,0 +1,41 @@
+#!/bin/bash
+# ---------
+## This is a bash script for recording, storing and sending an audio file to the prediction api, which is running on the same machine.
+## The recording is done with arecord, a command-line soundfile recorder.
+# ---------
+
+
+dir="/home/diego/Projects/TDG/voice-ordering-module/prediction-api/audio_samples"
+
+# Create folder if missing
+[ ! -d "$dir" ] && mkdir -p "$dir"
+
+# Unique filename
+file="$dir/$(uuidgen).wav"
+
+echo "Recording to $file"
+echo "Press ENTER to stop recording."
+
+# Start recording in the background
+arecord -f cd -t wav "$file" &
+rec_pid=$!
+
+# Wait for keypress
+read -r
+
+# Stop recording
+kill -INT $rec_pid >/dev/null 2>&1
+
+# Make sure the process actually stops
+wait $rec_pid 2>/dev/null
+
+echo "Recording stopped."
+echo "Sending to API..."
+
+# Call your API
+curl -s -X GET http://localhost:5000/predict \
+    -H "Content-Type: application/json" \
+    -d "{\"filename\": \"$(basename "$file")\"}" | jq .
+
+echo
+
