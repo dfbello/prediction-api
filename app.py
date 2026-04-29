@@ -12,15 +12,18 @@ from prediction.predictor import predict
 app = Flask(__name__)
 
 RECORDINGS_DIR = "audio_samples"
-MODELS_DIR = "models/test_client_test_store/nlu_model/"
+MODELS_BASE_DIR = "models/test_client_test_store"
+MODEL_SLOT_1 = os.path.join(MODELS_BASE_DIR, "nlu_model_1")
+MODEL_SLOT_2 = os.path.join(MODELS_BASE_DIR, "nlu_model_2")
 
+active_slot = 1
 model_path = None
 ner_pipeline = None
 load_menu_from_file("../menu_items.json")
 
 # Intenta cargar el modelo al inicio, pero continúa si falla
 try:
-    model_path = find_latest_model(MODELS_DIR)
+    model_path = find_latest_model(MODEL_SLOT_1) if active_slot == 1 else find_latest_model(MODEL_SLOT_2)
     ner_pipeline = load_model(model_path)
 except Exception as e:
     print(f"[WARNING] Could not load model at startup: {str(e)}")
@@ -95,7 +98,7 @@ def menu_update():
     Webhook endpoint called by the Menu Management Service.
     Receives a full menu object and replaces the cached menu.
     """
-    global model_path, ner_pipeline
+    global model_path, ner_pipeline, active_slot
     
     if not request.is_json:
         return jsonify({"error": "Expected JSON body"}), 400
@@ -107,7 +110,7 @@ def menu_update():
         return jsonify({"error": "Missing 'menu' field"}), 400
 
     ## Validate client and franchise
-    print(f"Client ID received: {menu.get("client_id")}")
+    print(f"Client ID received: {menu.get('client_id')}")
 
     if menu.get("client_id") != CLIENT_ID:
         return jsonify({"error": f"Field \"client_id\" does not match current client id"}), 400
@@ -117,15 +120,30 @@ def menu_update():
 
     # Replace the menu in cache for the predictor
     set_menu(menu)
-    
+
+    # 🔁 swap slot (blue/green)
+    active_slot = 2 if active_slot == 1 else 1
+    next_model_dir = MODEL_SLOT_1 if active_slot == 1 else MODEL_SLOT_2
+
+    print(f"[INFO] Swapping to nlu_model_{active_slot}")
+
     try:
-        model_path = find_latest_model(MODELS_DIR)	
+        model_path = find_latest_model(next_model_dir)
         ner_pipeline = load_model(model_path)
-        print("[INFO] Menu updated successfully via webhook")
-        return jsonify({"status": "menu updated"}), 200
+        print(f"[INFO] Model loaded from {model_path}")
+        return jsonify({
+            "status": "menu updated",
+            "active_slot": active_slot,
+            "model_path": model_path
+        }), 200
+
     except Exception as e:
-        print(f"[ERROR] Failed to load model: {str(e)}")
-        return jsonify({"error": f"Failed to load model: {str(e)}"}), 500
+        print(f"[ERROR] Failed to load model from slot {active_slot}: {str(e)}")
+        return jsonify({
+            "error": "Failed to load model",
+            "slot": active_slot,
+            "details": str(e)
+        }), 500
     
 
 if __name__ == "__main__":
