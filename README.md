@@ -1,137 +1,166 @@
 # Prediction API
 
-An API that accepts a local audio file, transcribes it with Google Speech-to-Text, and predicts the order from a restaurant menu using a Hugging Face token-classification model.
+A voice-driven order prediction service that turns spoken restaurant orders into structured JSON output using speech recognition and a transformer-based NER pipeline.
 
-The project is built as a small Flask service that:
+The project combines three core capabilities:
 
-- receives a request containing a filename pointing to an audio sample,
-- converts speech to text in Spanish (`es-CO`),
-- runs an NLU/NER model against the transcript,
-- matches extracted entities against the active menu,
-- returns a structured JSON order payload.
+- audio capture and transcription,
+- menu-aware entity extraction,
+- post-processing into a structured order payload.
 
-## Project overview
+The result is an API that can interpret spoken orders, match them against the active restaurant menu, and return a normalized order representation ready for downstream systems.
 
-This repository is a prototype for voice-order prediction. The service expects an audio file recorded locally, identifies spoken items and modifiers, and resolves them to menu entries using fuzzy matching and a cached menu document.
+## What this project solves
 
-The main flow is:
+The service addresses a common operational problem in food-service environments: converting natural spoken requests into machine-readable orders without requiring manual entry.
 
-1. A client sends a JSON payload with a filename to `/predict`.
-2. The Flask app verifies that the file exists and is non-empty.
-3. `SpeechRecognition` loads the audio and calls Google STT.
-4. The transcript is cleaned and passed to a Hugging Face NER pipeline.
-5. `model/postprocessing.py` converts entity predictions into a structured order object.
-6. The result is returned as JSON.
+Instead of a cashier or kiosk needing to interpret every spoken order, this application handles:
 
-## Architecture
+- speech-to-text conversion,
+- entity detection for items, quantities, and modifiers,
+- fuzzy matching against a catalog of menu items,
+- dynamic menu refreshes without redeploying the API.
 
-### 1. Flask application entry point
+## Why this matters
 
-File: `app.py`
+This project sits at the intersection of machine learning, backend engineering, and practical restaurant automation. It was designed to support a real ordering workflow where menu configuration can change and where model accuracy matters in noisy, conversational speech.
 
-This is the API server. It exposes two routes:
+It demonstrates the ability to build a service that is not only model-driven, but also operationally aware:
+
+- it validates client and franchise data,
+- it swaps model versions safely,
+- it manages the active menu in memory and on disk,
+- it keeps the service usable even when the model is not immediately available.
+
+## Tech stack
+
+- Python
+- Flask
+- SpeechRecognition
+- Hugging Face Transformers
+- Fuzzy matching with RapidFuzz / fuzzywuzzy
+- JSON-based menu management
+- Local filesystem for model and menu artifacts
+
+## System architecture
+
+The application is structured as a small modular backend service.
+
+### API layer
+
+`app.py` is the entry point for the Flask service. It exposes two relevant endpoints:
 
 - `GET /predict`
-  - Reads `filename` from the JSON body.
-  - Verifies the file exists in `audio_samples/`.
-  - Runs speech recognition.
-  - Calls the prediction pipeline.
-  - Returns a JSON response.
+  - accepts a filename for an audio sample,
+  - validates the file,
+  - runs speech-to-text,
+  - runs model inference,
+  - returns a JSON order prediction.
 
 - `POST /menu/update`
-  - Accepts a full menu document from a Menu Management Service.
-  - Validates `client_id` and `franchise_id` against `config.py`.
-  - Stores the new menu in memory and on disk.
-  - Swaps the active model slot (`nlu_model_1` / `nlu_model_2`) and reloads the model.
+  - validates the incoming menu payload,
+  - updates the active menu cache,
+  - writes the menu document to disk,
+  - reloads the active model slot.
 
-The app also loads a menu during startup and attempts to load the latest model checkpoint from the active slot.
+### Menu management
 
-### 2. Configuration
+The `menu/` package keeps menu state consistent and available to the prediction pipeline.
 
-File: `config.py`
+- `menu/cache.py` stores the active menu in memory.
+- `menu/manager.py` validates and writes the menu, then exposes it to the rest of the app.
+- `menu/menu_loader.py` loads menu JSON from disk into the runtime cache.
 
-Contains the active client and franchise identifiers used to validate incoming menu updates:
+This allows the API to work with a current menu without hardcoding it into the application logic.
 
-```python
-CLIENT_ID = "test_client"
-FRANCHISE_ID = "test_store"
+### Prediction pipeline
+
+The `prediction/` package handles the reasoning layer:
+
+- `prediction/text_cleaner.py` normalizes transcript input before inference.
+- `prediction/predictor.py` orchestrates the flow from spoken text to a structured order.
+
+### Model loading and post-processing
+
+The `model/` package is responsible for the ML runtime:
+
+- `model/loader.py` finds the latest checkpoint in a model slot and loads the Hugging Face token-classification pipeline.
+- `model/postprocessing.py` converts named entities into structured order items, quantity, and modifiers using alias matching and fuzzy resolution.
+
+This is where the raw model output is transformed into a business-friendly result such as:
+
+```json
+{
+  "items": [
+    {
+      "cantidad": 2,
+      "producto": "Hamburguesa",
+      "modificadores": ["con queso"]
+    }
+  ]
+}
 ```
 
-These values are used to reject menu updates that do not match the configured tenant.
-
-### 3. Menu layer
-
-Directory: `menu/`
-
-Responsible for menu lifecycle and cache management:
-
-- `menu/cache.py` — in-memory cache for the current menu
-- `menu/manager.py` — validates, writes, and exposes the current menu
-- `menu/menu_loader.py` — loads menu JSON files from disk into the cache
-
-The active menu is stored in the `MENU_CACHE` dictionary and also persisted to `menu_items.json` at the project root.
-
-### 4. Prediction layer
-
-Directory: `prediction/`
-
-- `prediction/text_cleaner.py` — normalizes transcript text before model inference
-- `prediction/predictor.py` — orchestrates the full prediction flow
-
-The predictor loads the current menu, normalizes the transcript, sends it to the loaded NER pipeline, and then converts recognized entities into a structured order object.
-
-### 5. Model loading and postprocessing
-
-Directory: `model/`
-
-- `model/loader.py` — finds the newest checkpoint folder in a model slot and loads the Hugging Face pipeline
-- `model/postprocessing.py` — transforms recognized entities into a JSON order payload, using fuzzy matching against menu aliases
-
-The model loader looks for checkpoint folders matching this pattern:
+## Core workflow
 
 ```text
-models/test_client_test_store/<slot>/checkpoint-* 
-```
-
-and chooses the newest checkpoint by modification time.
-
-### 6. Helper scripts
-
-Directory: `bin/`
-
-- `bin/record-order` — shell script that records audio samples, likely for capturing test-order clips to validate the model and API.
-
-## Data flow
-
-```text
-Client request
-  -> Flask route (/predict)
-  -> validate audio file
-  -> SpeechRecognition -> transcript
-  -> clean text
+Audio file
+  -> HTTP request to /predict
+  -> validate file and payload
+  -> SpeechRecognition (Google STT)
+  -> normalize transcript
   -> Hugging Face NER model
-  -> postprocess entities to JSON
-  -> return prediction
+  -> match entities to menu aliases
+  -> structured order JSON returned to client
 ```
 
-## Expected request format
+## File structure
 
-### Predict endpoint
+```text
+prediction-api/
+├── app.py
+├── config.py
+├── requirements.txt
+├── menu_items.json
+├── audio_samples/
+├── models/
+│   └── test_client_test_store/
+│       ├── nlu_model_1/
+│       └── nlu_model_2/
+├── menu/
+│   ├── cache.py
+│   ├── manager.py
+│   ├── menu_loader.py
+│   └── __init__.py
+├── model/
+│   ├── loader.py
+│   ├── postprocessing.py
+│   └── __init__.py
+├── prediction/
+│   ├── predictor.py
+│   ├── text_cleaner.py
+│   └── __init__.py
+├── bin/
+│   └── record-order
+└── README.md
+```
+
+## Request examples
+
+### Predict an order from an audio file
 
 ```http
 GET /predict
 Content-Type: application/json
 ```
 
-Body:
+Request body:
 
 ```json
 {
   "filename": "order_01.wav"
 }
 ```
-
-The file must exist under `audio_samples/` and should not contain path traversal segments like `../`.
 
 Example response:
 
@@ -150,14 +179,14 @@ Example response:
 }
 ```
 
-### Menu update endpoint
+### Update the menu dynamically
 
 ```http
 POST /menu/update
 Content-Type: application/json
 ```
 
-Body:
+Request body:
 
 ```json
 {
@@ -183,15 +212,15 @@ Body:
 }
 ```
 
-## Setup instructions
+## Setup and run
 
 ### Prerequisites
 
 - Python 3.10+
 - pip
-- A working internet connection for downloading Python dependencies and Hugging Face model files
-- A local directory named `audio_samples/` for test audio files
-- A trained model checkpoint under the expected model path structure
+- access to internet for installing dependencies and fetching Hugging Face model files
+- a local `audio_samples/` directory
+- a trained NER checkpoint under the expected model directory structure
 
 ### 1. Clone the repository
 
@@ -200,7 +229,7 @@ git clone https://github.com/dfbello/prediction-api.git
 cd prediction-api
 ```
 
-### 2. Create and activate a virtual environment
+### 2. Create a virtual environment
 
 ```bash
 python -m venv .venv
@@ -220,30 +249,27 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 4. Prepare the required folders and files
-
-Create the audio directory:
+### 4. Prepare required folders
 
 ```bash
 mkdir -p audio_samples
-```
-
-Create a model directory matching the expected layout:
-
-```bash
 mkdir -p models/test_client_test_store/nlu_model_1
 mkdir -p models/test_client_test_store/nlu_model_2
 ```
 
-Place a trained Hugging Face NER model checkpoint inside one of those directories, for example:
+Place a trained model checkpoint into one of the model directories using the expected pattern:
 
 ```text
-models/test_client_test_store/nlu_model_1/checkpoint-1234/
+models/test_client_test_store/nlu_model_1/checkpoint-*/
 ```
 
-The app will select the newest `checkpoint-*` folder automatically.
+The app automatically selects the newest `checkpoint-*` directory.
 
-Create a menu file at the project root named `menu_items.json` with a structure like:
+### 5. Provide a menu file
+
+Create a root-level `menu_items.json` containing menu data for the active client and franchise.
+
+Example:
 
 ```json
 {
@@ -267,70 +293,26 @@ Create a menu file at the project root named `menu_items.json` with a structure 
 }
 ```
 
-### 5. Run the API
+### 6. Run the service
 
 ```bash
 python app.py
 ```
 
-The Flask app will start in development mode by default:
+The API will run locally on:
 
 ```text
 http://127.0.0.1:5000
 ```
 
-## Example workflow
+## Operational notes
 
-### Start the service
-
-```bash
-python app.py
-```
-
-### Send a sample prediction request
-
-```bash
-curl -X GET http://localhost:5000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"filename":"sample_order.wav"}'
-```
-
-### Update the menu and reload the model
-
-```bash
-curl -X POST http://localhost:5000/menu/update \
-  -H "Content-Type: application/json" \
-  -d '{
-    "menu": {
-      "client_id": "test_client",
-      "franchise_id": "test_store",
-      "locale": "es-CO",
-      "version": 1,
-      "items": []
-    }
-  }'
-```
-
-## Notes and caveats
-
-- The app currently uses Google Speech Recognition (`recognize_google`) for transcription.
-- The model is loaded at startup if a valid checkpoint exists.
-- If no model is available, `/predict` returns a `503` error.
-- The app uses a blue/green model approach via `nlu_model_1` and `nlu_model_2` to swap after menu updates.
-- This is a local prototype and is not production hardened for multi-user deployment, authentication, or persistent storage beyond the local file-based menu cache.
-
-## License
-
-This project does not currently declare a license in the repository root. If you plan to distribute it publicly, add a license file such as MIT or Apache 2.0.
+- `config.py` defines the accepted `CLIENT_ID` and `FRANCHISE_ID` values.
+- The app validates menu updates to prevent mismatched tenant data.
+- The model uses a blue/green slot strategy with `nlu_model_1` and `nlu_model_2`.
+- If no valid model is loaded, the prediction endpoint returns an error instead of attempting an invalid inference.
+- The project is designed as a service prototype and can be extended with authentication, production deployment, and monitoring.
 
 ## Summary
 
-`prediction-api` is a lightweight voice-order inference service for restaurant ordering. It combines:
-
-- Flask web endpoints,
-- Google speech transcription,
-- a Hugging Face NER pipeline,
-- fuzzy matching against a menu catalog,
-- dynamic menu updates and model slot swapping.
-
-It is designed to convert spoken orders into a structured JSON payload suitable for downstream ordering systems.
+This project demonstrates a practical full-stack AI workflow: turning spoken restaurant requests into structured machine-readable orders. It blends backend API development, speech recognition, ML model integration, and menu-aware post-processing into a single service that reflects real-world decision-making in voice-driven ordering systems.
