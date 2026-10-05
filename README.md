@@ -46,6 +46,16 @@ It demonstrates the ability to build a service that is not only model-driven, bu
 
 The application is structured as a small modular backend service.
 
+### Architecture diagrams
+
+These diagrams summarize the main system flows and interfaces:
+
+![Overall application architecture](images/architecture.png)
+
+![Prediction API architecture](images/prediction-api.png)
+
+![Waiter interface flow](images/waiter-interface.png)
+
 ### API layer
 
 `app.py` is the entry point for the Flask service. It exposes two relevant endpoints:
